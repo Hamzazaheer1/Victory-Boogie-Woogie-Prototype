@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>VBB Prototype (Protected + Completion)</title>
+    <style>
+      body {
+        margin: 0;
+        background: #111;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        gap: 20px;
+      }
+      .canvas-container {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+      }
+      .canvas-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+      .canvas-label {
+        color: #bbb;
+        font: 12px/1.4 Arial;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      canvas {
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      }
+      .hint {
+        position: fixed;
+        bottom: 12px;
+        color: #bbb;
+        font: 12px/1.4 Arial;
+      }
+      .hint code {
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas-container">
+      <div class="canvas-wrapper">
+        <div class="canvas-label">Base (Protected)</div>
+        <div id="base-canvas"></div>
+      </div>
+      <div class="canvas-wrapper">
+        <div class="canvas-label">Generated (Complete)</div>
+        <div id="generated-canvas"></div>
+      </div>
+    </div>
+    <div class="hint">
+      Press <code>R</code> to rerun (same seed), change seed in
+      <code>sketch.js</code>.
+    </div>
+
+    <!-- p5.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+
+    <!-- Your files -->
+    <script src="./data.js"></script>
+    <script src="./prng.js"></script>
+    <script src="./sketch.js"></script>
+  </body>
+</html>
