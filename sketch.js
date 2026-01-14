@@ -6,7 +6,7 @@
 // =====================
 
 const CELL = 20;
-const BASE_BG = 240;
+const BASE_BG = 0;
 
 const PALETTE = ["#f2c500", "#d62828", "#1f3c88", "#f5f5f5"];
 const WEIGHTS = [30, 25, 15, 30];
@@ -21,6 +21,19 @@ const MAX_FILL_JUMP = 0.15;
 
 // Deterministic seed
 const SEED = "demo-seed-001";
+
+// Diamond shape bounds (Victory Boogie Woogie is diamond-shaped, not square)
+// Scaled from SVG: M207.5 2012.5L2051.5 144.5L3895.5 2012.5L2051.5 3845L207.5 2012.5Z
+// Original: (207.5, 2012.5) -> (2051.5, 144.5) -> (3895.5, 2012.5) -> (2051.5, 3845)
+// Scaled to 400x400:
+const DIAMOND_BOUNDS = {
+  centerX: 200, // 2051.5 * 400/4096 ≈ 200
+  centerY: 196, // 2012.5 * 400/4096 ≈ 196
+  leftX: 20, // 207.5 * 400/4096 ≈ 20
+  rightX: 380, // 3895.5 * 400/4096 ≈ 380
+  topY: 14, // 144.5 * 400/4096 ≈ 14
+  bottomY: 375, // 3845 * 400/4096 ≈ 375
+};
 
 // =====================
 // STATE
@@ -72,7 +85,17 @@ function keyPressed() {
 
 function drawBaseCanvas(p) {
   p.background(BASE_BG);
-  drawProtected(p, MONDRIAN_DATA.protected);
+
+  // Draw diamond background
+  drawDiamondBackground(p);
+
+  // Filter protected shapes to only those inside diamond
+  const protectedInsideDiamond = filterToDiamond(MONDRIAN_DATA.protected);
+
+  // Set up diamond clipping
+  setupDiamondClipping(p);
+  drawProtected(p, protectedInsideDiamond);
+  endDiamondClipping(p);
 }
 
 function runPipeline(p) {
@@ -83,27 +106,123 @@ function runPipeline(p) {
 
   p.background(BASE_BG);
 
+  // 0) Draw diamond background
+  drawDiamondBackground(p);
+
+  // 0.5) Filter protected shapes to only those inside diamond
+  const protectedInsideDiamond = filterToDiamond(MONDRIAN_DATA.protected);
+
+  // 0.6) Set up diamond clipping
+  setupDiamondClipping(p);
+
   // 1) Protected layer
-  drawProtected(p, MONDRIAN_DATA.protected);
+  drawProtected(p, protectedInsideDiamond);
 
   // 2) Grid occupancy
   initGrid(W, H, CELL);
-  stampProtectedToGrid(MONDRIAN_DATA.protected, CELL);
+  stampProtectedToGrid(protectedInsideDiamond, CELL);
 
   // 3) Void detection
   const voidRects = findMergedVoids(W, H, CELL);
 
+  // 3.5) Filter voids to only those inside diamond
+  const voidRectsInDiamond = voidRects.filter((rect) =>
+    rectIntersectsDiamond(rect)
+  );
+
   // 4) Pattern-aware Mondrian completion
-  const filledRects = fillVoidsWithStop(p, voidRects, W, H);
+  const filledRects = fillVoidsWithStop(p, voidRectsInDiamond, W, H);
 
   // 5) Protected redraw (authority)
-  drawProtected(p, MONDRIAN_DATA.protected);
+  drawProtected(p, protectedInsideDiamond);
 
-  // 6) Subtle grain
+  // 6) End diamond clipping
+  endDiamondClipping(p);
+
+  // 7) Subtle grain (only inside diamond)
+  setupDiamondClipping(p);
   applyLightGrain(p, 1400);
+  endDiamondClipping(p);
 
-  // 7) Report
+  // 8) Report
   printFinalReport(filledRects, W, H);
+}
+
+// =====================
+// DIAMOND SHAPE HELPERS
+// =====================
+
+function drawDiamondBackground(p) {
+  const { centerX, centerY, leftX, rightX, topY, bottomY } = DIAMOND_BOUNDS;
+  p.fill(BASE_BG);
+  p.noStroke();
+  // Draw diamond shape
+  p.beginShape();
+  p.vertex(centerX, topY); // Top
+  p.vertex(rightX, centerY); // Right
+  p.vertex(centerX, bottomY); // Bottom
+  p.vertex(leftX, centerY); // Left
+  p.endShape(p.CLOSE);
+}
+
+// Set up diamond clipping mask for drawing
+function setupDiamondClipping(p) {
+  const { centerX, centerY, leftX, rightX, topY, bottomY } = DIAMOND_BOUNDS;
+
+  // Use the mask
+  p.drawingContext.globalCompositeOperation = "source-over";
+  p.drawingContext.save();
+  p.drawingContext.beginPath();
+  p.drawingContext.moveTo(centerX, topY);
+  p.drawingContext.lineTo(rightX, centerY);
+  p.drawingContext.lineTo(centerX, bottomY);
+  p.drawingContext.lineTo(leftX, centerY);
+  p.drawingContext.closePath();
+  p.drawingContext.clip();
+}
+
+function endDiamondClipping(p) {
+  p.drawingContext.restore();
+}
+
+// Check if a rectangle intersects the diamond shape
+function rectIntersectsDiamond(rect) {
+  const { centerX, centerY, leftX, rightX, topY, bottomY } = DIAMOND_BOUNDS;
+  const widthRatio = rightX - centerX;
+  const heightRatio = bottomY - centerY;
+
+  // Check if any corner of the rectangle is inside diamond
+  const corners = [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.w, y: rect.y },
+    { x: rect.x, y: rect.y + rect.h },
+    { x: rect.x + rect.w, y: rect.y + rect.h },
+  ];
+
+  for (const corner of corners) {
+    const dx = Math.abs(corner.x - centerX);
+    const dy = Math.abs(corner.y - centerY);
+    if (dx / widthRatio + dy / heightRatio <= 1) {
+      return true;
+    }
+  }
+
+  // Also check if rectangle contains the diamond center
+  if (
+    rect.x <= centerX &&
+    rect.x + rect.w >= centerX &&
+    rect.y <= centerY &&
+    rect.y + rect.h >= centerY
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+// Filter protected shapes to only those that intersect the diamond
+function filterToDiamond(protectedShapes) {
+  return protectedShapes.filter((shape) => rectIntersectsDiamond(shape));
 }
 
 // =====================
